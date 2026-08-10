@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Teaching Assistant | Grounded Video Q&A</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="app-background"></div>
+
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        <div class="brand-text">
+          <h1>RAG Assistant</h1>
+          <span class="version-tag">v1.0 • Private Session AI</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="chat-tab">
+          <i class="fa-solid fa-comments"></i>
+          <span>Ask Assistant</span>
+        </button>
+        <button class="nav-item" data-tab="ingest-tab">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <span>Ingest Lecture</span>
+        </button>
+        <button class="nav-item" data-tab="library-tab">
+          <i class="fa-solid fa-photo-film"></i>
+          <span>Video Library</span>
+        </button>
+        <button class="nav-item" data-tab="transcript-tab">
+          <i class="fa-solid fa-file-lines"></i>
+          <span>Transcript Browser</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-card">
+          <div class="status-header">
+            <span class="status-indicator online" id="statusDot"></span>
+            <span class="status-title" id="statusText">System Active</span>
+          </div>
+          <div class="status-details">
+            <div class="status-detail-item">
+              <span class="detail-label">LLM Provider:</span>
+              <span class="detail-value" id="statusProvider">Gemini</span>
+            </div>
+            <div class="status-detail-item">
+              <span class="detail-label">Whisper Model:</span>
+              <span class="detail-value" id="statusWhisper">Base</span>
+            </div>
+            <div class="status-detail-item">
+              <span class="detail-label">FAISS Index:</span>
+              <span class="detail-value" id="statusEmbed">all-MiniLM</span>
+            </div>
+          </div>
+          
+          <!-- Private Session Isolation Footer -->
+          <div class="user-session-bar" id="userSessionBar" style="display: flex;">
+            <div class="user-info" title="Your private isolated workspace">
+              <i class="fa-solid fa-user-shield"></i>
+              <span id="sessionUsername">Private Session</span>
+            </div>
+            <button class="btn-logout" id="newSessionBtn" title="Start Fresh Private Workspace">
+              <i class="fa-solid fa-plus-circle"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Header Bar -->
+      <header class="top-header">
+        <div class="header-title">
+          <h2 id="pageTitle">Lecture Video Q&A Assistant</h2>
+          <p id="pageSubtitle">Ask questions grounded in transcript excerpts with exact video timestamps.</p>
+        </div>
+        <div class="header-actions">
+          <div class="video-filter-select">
+            <i class="fa-solid fa-filter"></i>
+            <select id="videoFilterSelect">
+              <option value="">All Lectures (Global Search)</option>
+            </select>
+          </div>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <!-- TAB 1: Chat Assistant -->
+        <section class="tab-pane active" id="chat-tab">
+          <div class="chat-layout">
+            <!-- Left Chat Stream -->
+            <div class="chat-main">
+              <div class="chat-messages" id="chatMessages">
+                <!-- Welcome Card -->
+                <div class="welcome-card">
+                  <div class="welcome-icon">
+                    <i class="fa-solid fa-robot"></i>
+                  </div>
+                  <h3>Welcome to RAG Teaching Assistant!</h3>
+                  <p>Upload a lecture video to transcribe and index it into FAISS vector search, or ask questions below to retrieve timestamped video citations.</p>
+                  
+                  <div class="quick-prompts-title">Try asking:</div>
+                  <div class="quick-prompts" id="quickPrompts">
+                    <button class="prompt-chip" data-prompt="What is the time complexity of hash map lookup?">
+                      <i class="fa-solid fa-lightbulb"></i> What is the time complexity of a hash map?
+                    </button>
+                    <button class="prompt-chip" data-prompt="Summarize the core algorithms introduced in the lecture.">
+                      <i class="fa-solid fa-lightbulb"></i> Summarize key concepts discussed
+                    </button>
+                    <button class="prompt-chip" data-prompt="Explain how binary search trees maintain order.">
+                      <i class="fa-solid fa-lightbulb"></i> How does a binary search tree work?
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Input Area -->
+              <div class="chat-input-wrapper">
+                <form id="askForm" class="chat-form">
+                  <div class="input-container">
+                    <input 
+                      type="text" 
+                      id="questionInput" 
+                      placeholder="Ask any question about your lecture videos..." 
+                      autocomplete="off" 
+                      required
+                    >
+                    <button type="submit" id="sendBtn" class="send-button">
+                      <span>Ask AI</span>
+                      <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- Right Citation / Player Sidebar -->
+            <div class="chat-side-panel">
+              <div class="panel-header">
+                <h3><i class="fa-solid fa-bookmark"></i> Video Citations</h3>
+                <span class="badge" id="citationCountBadge">0 Sources</span>
+              </div>
+
+              <!-- Video Player Container (shows when media exists) -->
+              <div class="media-preview-container" id="mediaPreviewContainer" style="display: none;">
+                <video id="videoPlayer" controls width="100%"></video>
+                <div class="player-info" id="playerInfo">Select a citation to play timestamp</div>
+              </div>
+
+              <!-- Citations List -->
+              <div class="citations-list" id="citationsList">
+                <div class="empty-citations">
+                  <i class="fa-solid fa-quote-left"></i>
+                  <p>Citations with exact timestamp ranges will appear here when you ask a question.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 2: Ingest Video -->
+        <section class="tab-pane" id="ingest-tab">
+          <div class="ingest-container">
+            <div class="glass-card upload-card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-cloud-arrow-up"></i> Upload Lecture Video</h3>
+                <p>FastAPI uses <code>ffmpeg</code> + <code>faster-whisper</code> to extract mono audio, transcribe timestamps, chunk, and index into FAISS.</p>
+              </div>
+
+              <div class="dropzone" id="dropzone">
+                <input type="file" id="videoFileInput" accept="video/*,audio/*" style="display: none;">
+                <div class="dropzone-content">
+                  <div class="upload-icon">
+                    <i class="fa-solid fa-file-video"></i>
+                  </div>
+                  <h4>Drag & Drop your lecture video file here</h4>
+                  <p>Supports MP4, MOV, MKV, AVI, MP3, WAV</p>
+                  <button type="button" class="btn btn-secondary" onclick="document.getElementById('videoFileInput').click()">
+                    Browse Files
+                  </button>
+                </div>
+              </div>
+
+              <!-- Uploading Pipeline Progress -->
+              <div class="pipeline-progress" id="pipelineProgress" style="display: none;">
+                <div class="progress-header">
+                  <span id="pipelineStatusText">Processing video pipeline...</span>
+                  <span id="pipelinePercentText">0%</span>
+                </div>
+                <div class="progress-bar">
+                  <div class="progress-fill" id="pipelineProgressFill"></div>
+                </div>
+
+                <div class="pipeline-steps">
+                  <div class="step-item" id="stepUpload">
+                    <div class="step-icon"><i class="fa-solid fa-upload"></i></div>
+                    <div class="step-text">Uploading File</div>
+                  </div>
+                  <div class="step-item" id="stepFFmpeg">
+                    <div class="step-icon"><i class="fa-solid fa-file-audio"></i></div>
+                    <div class="step-text">FFmpeg Audio Extraction</div>
+                  </div>
+                  <div class="step-item" id="stepWhisper">
+                    <div class="step-icon"><i class="fa-solid fa-closed-captioning"></i></div>
+                    <div class="step-text">Faster-Whisper Transcription</div>
+                  </div>
+                  <div class="step-item" id="stepFAISS">
+                    <div class="step-icon"><i class="fa-solid fa-database"></i></div>
+                    <div class="step-text">Sentence-Transformers & FAISS</div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="ingestResultCard" style="display: none;" class="result-alert success">
+                <i class="fa-solid fa-circle-check"></i>
+                <div class="result-info">
+                  <h4 id="resultTitle">Video Ingestion Complete!</h4>
+                  <p id="resultDetails">Indexed 45 segments into 12 vector chunks.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 3: Video Library -->
+        <section class="tab-pane" id="library-tab">
+          <div class="library-container">
+            <div class="library-header">
+              <h3>Ingested Lecture Collection</h3>
+              <button class="btn btn-sm btn-outline" id="refreshLibraryBtn">
+                <i class="fa-solid fa-rotate-right"></i> Refresh
+              </button>
+            </div>
+            <div class="video-grid" id="videoGrid">
+              <!-- Video Cards injected here -->
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 4: Transcript Browser -->
+        <section class="tab-pane" id="transcript-tab">
+          <div class="transcript-container">
+            <div class="transcript-sidebar">
+              <h4>Select Lecture</h4>
+              <div class="lecture-list" id="transcriptVideoList">
+                <div class="empty-list">No lectures uploaded yet.</div>
+              </div>
+            </div>
+            <div class="transcript-viewer-main">
+              <div class="viewer-header">
+                <div class="viewer-title">
+                  <h3 id="transcriptTitle">Select a lecture to view transcript</h3>
+                  <span class="subtitle" id="transcriptSubtitle">Click any segment to play video timestamp</span>
+                </div>
+                <div class="viewer-search">
+                  <i class="fa-solid fa-search"></i>
+                  <input type="text" id="transcriptSearchInput" placeholder="Filter transcript text...">
+                </div>
+              </div>
+              <div class="segments-list" id="segmentsList">
+                <div class="empty-segments">
+                  <i class="fa-solid fa-align-left"></i>
+                  <p>Select a lecture on the left to inspect its full transcript and timestamp segments.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+# Environment variables and secret keys
+.env
+*.env
+
+# Python virtual environment
+venv/
+env/
+ENV/
+.venv
+
+# Python cache & build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Large media files and database indices (user session data)
+data/raw_videos/*
+data/audio/*
+data/transcripts/*
+data/index/*
+data/sessions/*
+!data/raw_videos/.gitkeep
+!data/audio/.gitkeep
+!data/transcripts/.gitkeep
+!data/index/.gitkeep
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
