@@ -1,7 +1,9 @@
-# RAG Teaching Assistant
+# 🎓 RAG Teaching Assistant
 
-Ask questions about lecture videos and get answers grounded in the actual
-transcript, with timestamp citations back to the source video.
+Ask questions about lecture videos and get answers grounded in the actual transcript, with timestamp citations back to the source video.
+
+- 🌐 **Live Cloud Application**: [https://rag-teaching-assistant-njhd.onrender.com](https://rag-teaching-assistant-njhd.onrender.com)
+- 🐙 **GitHub Repository**: [https://github.com/Subodhydv/RAG-Assistant](https://github.com/Subodhydv/RAG-Assistant)
 
 ## Pipeline
 
