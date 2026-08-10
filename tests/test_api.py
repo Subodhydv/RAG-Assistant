@@ -64,3 +64,21 @@ def test_ask_rejects_too_short_question(client):
     headers = {"X-Session-ID": "sess_test123"}
     resp = client.post("/ask", json={"question": "hi"}, headers=headers)
     assert resp.status_code == 422  # pydantic min_length=3 validation
+
+
+def test_export_notes(client):
+    payload = {
+        "title": "Data Structures Study Notes",
+        "messages": [
+            {
+                "question": "What is hash map lookup complexity?",
+                "answer": "Average O(1) time complexity.",
+                "citations": [{"source_filename": "ds.mp3", "start": 10.0, "end": 25.0}],
+            }
+        ],
+    }
+    resp = client.post("/export-notes", json=payload)
+    assert resp.status_code == 200
+    assert "Data Structures Study Notes" in resp.text
+    assert "What is hash map lookup complexity?" in resp.text
+    assert "Average O(1) time complexity." in resp.text

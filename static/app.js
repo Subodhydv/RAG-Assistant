@@ -177,6 +177,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  let qaHistory = [];
+  const exportNotesBtn = document.getElementById('exportNotesBtn');
+
+  if (exportNotesBtn) {
+    exportNotesBtn.addEventListener('click', async () => {
+      if (qaHistory.length === 0) {
+        alert('No Q&A history yet! Ask a question first to generate study notes.');
+        return;
+      }
+
+      try {
+        const res = await fetchWithSession('/export-notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: 'Lecture Study Guide & Q&A Summary',
+            messages: qaHistory
+          })
+        });
+
+        if (!res.ok) {
+          throw new Error('Failed to generate export file');
+        }
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'lecture_study_notes.md';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert(`Export Error: ${err.message}`);
+      }
+    });
+  }
+
   // Q&A /ask Form Submission
   askForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -214,6 +253,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       appendMessage(data.answer, 'bot');
       renderCitations(data.citations);
+
+      qaHistory.push({
+        question: question,
+        answer: data.answer,
+        citations: data.citations
+      });
 
     } catch (err) {
       removeMessage(loadingId);

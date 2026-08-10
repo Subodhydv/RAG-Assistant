@@ -18,9 +18,10 @@ import uuid
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, Depends, Header
+from fastapi import FastAPI, File, HTTPException, UploadFile, Depends, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from app.config import settings, BASE_DIR, get_session_paths
 from app.generation.answer import generate_answer
@@ -137,6 +138,15 @@ async def ingest(file: UploadFile = File(...), session_id: str = Depends(get_ses
     )
 
 
+from datetime import datetime
+from fastapi import Response
+
+
+class ExportNotesRequest(BaseModel):
+    title: Optional[str] = "Lecture Study Guide"
+    messages: List[Dict[str, Any]]
+
+
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest, session_id: str = Depends(get_session_id)):
     store = get_store(session_id)
@@ -156,6 +166,42 @@ def ask(req: AskRequest, session_id: str = Depends(get_session_id)):
         for c in retrieved
     ]
     return AskResponse(answer=answer, citations=citations)
+
+
+@app.post("/export-notes")
+def export_notes(req: ExportNotesRequest):
+    lines = [
+        f"# {req.title or 'Lecture Study Guide'}",
+        f"*Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} via RAG Teaching Assistant*\n",
+        "---\n",
+    ]
+    for i, msg in enumerate(req.messages, start=1):
+        q = msg.get("question", "")
+        a = msg.get("answer", "")
+        citations = msg.get("citations", [])
+
+        lines.append(f"### Q{i}: {q}\n")
+        lines.append(f"{a}\n")
+
+        if citations:
+            lines.append("**Timestamp Citations**:")
+            for c in citations:
+                fn = c.get("source_filename", "video")
+                st = c.get("start", 0)
+                en = c.get("end", 0)
+                m1, s1 = int(st // 60), int(st % 60)
+                m2, s2 = int(en // 60), int(en % 60)
+                lines.append(f"- `{fn}` @ {m1}:{s1:02d} - {m2}:{s2:02d}")
+            lines.append("")
+
+        lines.append("---\n")
+
+    content = "\n".join(lines)
+    return Response(
+        content=content,
+        media_type="text/markdown",
+        headers={"Content-Disposition": 'attachment; filename="lecture_study_notes.md"'},
+    )
 
 
 # Mount media files for video playback
