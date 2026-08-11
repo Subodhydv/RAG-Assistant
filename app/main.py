@@ -212,24 +212,28 @@ def generate_quiz(req: QuizRequest, session_id: str = Depends(get_session_id)):
 
     selected_transcript = None
 
-    if req.video_id:
-        selected_transcript = load_transcript(req.video_id, transcripts_dir=transcripts_dir)
-        if not selected_transcript:
-            selected_transcript = load_transcript(req.video_id, transcripts_dir=settings.transcripts_dir)
-    else:
-        # Pick the first transcript in session transcripts dir, or default
-        files = list(transcripts_dir.glob("*.json"))
-        if files:
-            video_id = files[0].stem
-            selected_transcript = load_transcript(video_id, transcripts_dir=transcripts_dir)
+    try:
+        if req.video_id:
+            selected_transcript = load_transcript(req.video_id, session_id=session_id)
         else:
-            global_files = list(settings.transcripts_dir.glob("*.json"))
-            if global_files:
-                video_id = global_files[0].stem
-                selected_transcript = load_transcript(video_id, transcripts_dir=settings.transcripts_dir)
+            # Pick the first transcript in session transcripts dir, or default
+            files = list(transcripts_dir.glob("*.json"))
+            if files:
+                video_id = files[0].stem
+                selected_transcript = load_transcript(video_id, session_id=session_id)
+            else:
+                global_files = list(settings.transcripts_dir.glob("*.json"))
+                if global_files:
+                    video_id = global_files[0].stem
+                    selected_transcript = load_transcript(video_id, session_id=session_id)
+    except Exception:
+        selected_transcript = None
 
     if not selected_transcript:
-        raise HTTPException(status_code=404, detail="No ingested lecture video transcripts found to generate quiz. Please upload a video first!")
+        raise HTTPException(
+            status_code=404,
+            detail="No ingested lecture video transcripts found in your session. Please upload a video in the 'Ingest Lecture' tab first!"
+        )
 
     num_q = req.num_questions or 5
     return generate_quiz_questions(selected_transcript, num_questions=num_q)

@@ -98,7 +98,7 @@ def test_quiz_endpoint(client, monkeypatch):
         ]
     )
 
-    monkeypatch.setattr(main_module, "load_transcript", lambda video_id=None, transcripts_dir=None: fake_transcript)
+    monkeypatch.setattr(main_module, "load_transcript", lambda video_id=None, session_id=None: fake_transcript)
 
     resp = client.post("/quiz", json={"num_questions": 2})
     assert resp.status_code == 200

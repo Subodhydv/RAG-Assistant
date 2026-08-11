@@ -683,11 +683,15 @@ document.addEventListener('DOMContentLoaded', () => {
           quizProgressText.textContent = 'No questions generated.';
         }
       } else {
-        const err = await res.json();
-        quizLoading.innerHTML = `<p class="form-error">${err.detail || 'Failed to load quiz.'}</p>`;
+        let errorMsg = 'Failed to load quiz.';
+        try {
+          const err = await res.json();
+          if (err && err.detail) errorMsg = err.detail;
+        } catch (_) {}
+        quizLoading.innerHTML = `<p class="form-error" style="max-width: 480px; margin: 10px auto; line-height: 1.5;"><i class="fa-solid fa-circle-exclamation"></i> ${errorMsg}</p>`;
       }
     } catch (e) {
-      quizLoading.innerHTML = `<p class="form-error">Error connecting to server to generate quiz.</p>`;
+      quizLoading.innerHTML = `<p class="form-error" style="max-width: 480px; margin: 10px auto; line-height: 1.5;"><i class="fa-solid fa-circle-exclamation"></i> Could not connect to server to generate quiz. Please check server logs.</p>`;
     }
   }
 
