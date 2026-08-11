@@ -82,3 +82,29 @@ def test_export_notes(client):
     assert "Data Structures Study Notes" in resp.text
     assert "What is hash map lookup complexity?" in resp.text
     assert "Average O(1) time complexity." in resp.text
+
+
+def test_quiz_endpoint(client, monkeypatch):
+    from app.models import VideoTranscript, TranscriptSegment
+    import app.main as main_module
+
+    fake_transcript = VideoTranscript(
+        video_id="vid_test",
+        source_filename="test_lecture.mp4",
+        language="en",
+        segments=[
+            TranscriptSegment(start=10.0, end=20.0, text="Binary search trees maintain sorted keys."),
+            TranscriptSegment(start=25.0, end=40.0, text="Hash tables provide fast constant time access.")
+        ]
+    )
+
+    monkeypatch.setattr(main_module, "load_transcript", lambda video_id=None, transcripts_dir=None: fake_transcript)
+
+    resp = client.post("/quiz", json={"num_questions": 2})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "questions" in data
+    assert len(data["questions"]) == 2
+    assert "options" in data["questions"][0]
+    assert "correct_answer" in data["questions"][0]
+

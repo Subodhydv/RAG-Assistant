@@ -88,6 +88,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Mobile Sidebar Drawer Controls
+  const sidebar = document.getElementById('sidebar');
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+  function openSidebar() {
+    if (sidebar) sidebar.classList.add('open');
+    if (sidebarOverlay) sidebarOverlay.classList.add('active');
+  }
+
+  function closeSidebar() {
+    if (sidebar) sidebar.classList.remove('open');
+    if (sidebarOverlay) sidebarOverlay.classList.remove('active');
+  }
+
+  if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', openSidebar);
+  if (sidebarCloseBtn) sidebarCloseBtn.addEventListener('click', closeSidebar);
+  if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
+
   // Tab Navigation
   navItems.forEach(item => {
     item.addEventListener('click', () => {
@@ -99,6 +119,11 @@ document.addEventListener('DOMContentLoaded', () => {
       item.classList.add('active');
       const targetPane = document.getElementById(tabId);
       if (targetPane) targetPane.classList.add('active');
+
+      // Close mobile drawer after selecting a tab
+      if (window.innerWidth <= 992) {
+        closeSidebar();
+      }
 
       switch (tabId) {
         case 'chat-tab':
@@ -588,5 +613,160 @@ document.addEventListener('DOMContentLoaded', () => {
       const filtered = activeTranscriptSegments.filter(s => s.text.toLowerCase().includes(q));
       renderSegments(filtered);
     });
+  }
+
+  // --- Quiz Generator UI Logic ---
+  const generateQuizBtn = document.getElementById('generateQuizBtn');
+  const quizModal = document.getElementById('quizModal');
+  const closeQuizModalBtn = document.getElementById('closeQuizModalBtn');
+  const quizTitle = document.getElementById('quizTitle');
+  const quizProgressFill = document.getElementById('quizProgressFill');
+  const quizProgressText = document.getElementById('quizProgressText');
+  const quizLoading = document.getElementById('quizLoading');
+  const quizQuestionContainer = document.getElementById('quizQuestionContainer');
+  const quizQuestionText = document.getElementById('quizQuestionText');
+  const quizOptionsGrid = document.getElementById('quizOptionsGrid');
+  const quizExplanationBox = document.getElementById('quizExplanationBox');
+  const expStatus = document.getElementById('expStatus');
+  const expText = document.getElementById('expText');
+  const quizResultContainer = document.getElementById('quizResultContainer');
+  const resultScoreHeading = document.getElementById('resultScoreHeading');
+  const resultScoreSub = document.getElementById('resultScoreSub');
+  const nextQuizQuestionBtn = document.getElementById('nextQuizQuestionBtn');
+  const retryQuizBtn = document.getElementById('retryQuizBtn');
+
+  let currentQuizQuestions = [];
+  let currentQuizIndex = 0;
+  let currentQuizScore = 0;
+
+  function openQuizModal() {
+    if (quizModal) quizModal.style.display = 'flex';
+    fetchQuiz();
+  }
+
+  function closeQuizModal() {
+    if (quizModal) quizModal.style.display = 'none';
+  }
+
+  if (generateQuizBtn) generateQuizBtn.addEventListener('click', openQuizModal);
+  if (closeQuizModalBtn) closeQuizModalBtn.addEventListener('click', closeQuizModal);
+  if (retryQuizBtn) retryQuizBtn.addEventListener('click', fetchQuiz);
+
+  async function fetchQuiz() {
+    quizLoading.style.display = 'block';
+    quizQuestionContainer.style.display = 'none';
+    quizResultContainer.style.display = 'none';
+    nextQuizQuestionBtn.style.display = 'none';
+    quizProgressFill.style.width = '0%';
+    quizProgressText.textContent = 'Generating questions from transcript...';
+
+    const selectedVid = videoFilterSelect ? videoFilterSelect.value : null;
+
+    try {
+      const res = await fetchWithSession('/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_id: selectedVid, num_questions: 5 })
+      });
+
+      if (res && res.ok) {
+        const data = await res.json();
+        currentQuizQuestions = data.questions || [];
+        quizTitle.textContent = data.title || 'Lecture Self-Assessment';
+        currentQuizIndex = 0;
+        currentQuizScore = 0;
+        quizLoading.style.display = 'none';
+
+        if (currentQuizQuestions.length > 0) {
+          renderQuestion(currentQuizIndex);
+        } else {
+          quizProgressText.textContent = 'No questions generated.';
+        }
+      } else {
+        const err = await res.json();
+        quizLoading.innerHTML = `<p class="form-error">${err.detail || 'Failed to load quiz.'}</p>`;
+      }
+    } catch (e) {
+      quizLoading.innerHTML = `<p class="form-error">Error connecting to server to generate quiz.</p>`;
+    }
+  }
+
+  function renderQuestion(index) {
+    if (index >= currentQuizQuestions.length) {
+      showQuizResults();
+      return;
+    }
+
+    const q = currentQuizQuestions[index];
+    const total = currentQuizQuestions.length;
+
+    quizProgressFill.style.width = `${((index + 1) / total) * 100}%`;
+    quizProgressText.textContent = `Question ${index + 1} of ${total}`;
+
+    quizQuestionText.textContent = `${index + 1}. ${q.question}`;
+    quizOptionsGrid.innerHTML = '';
+    quizExplanationBox.style.display = 'none';
+    nextQuizQuestionBtn.style.display = 'none';
+    quizQuestionContainer.style.display = 'flex';
+
+    q.options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'option-btn';
+      btn.innerHTML = `<i class="fa-regular fa-circle"></i> <span>${opt}</span>`;
+      btn.addEventListener('click', () => handleOptionClick(btn, opt, q));
+      quizOptionsGrid.appendChild(btn);
+    });
+  }
+
+  function handleOptionClick(selectedBtn, selectedOption, q) {
+    const allBtns = quizOptionsGrid.querySelectorAll('.option-btn');
+    allBtns.forEach(b => b.disabled = true);
+
+    const isCorrect = selectedOption.trim().toLowerCase() === q.correct_answer.trim().toLowerCase() ||
+                      selectedOption.includes(q.correct_answer) ||
+                      q.correct_answer.includes(selectedOption);
+
+    if (isCorrect) {
+      selectedBtn.classList.add('correct');
+      selectedBtn.querySelector('i').className = 'fa-solid fa-circle-check';
+      expStatus.className = 'exp-status correct';
+      expStatus.textContent = '✓ Correct Answer!';
+      currentQuizScore++;
+    } else {
+      selectedBtn.classList.add('incorrect');
+      selectedBtn.querySelector('i').className = 'fa-solid fa-circle-xmark';
+      expStatus.className = 'exp-status incorrect';
+      expStatus.textContent = `✗ Incorrect. Correct choice: ${q.correct_answer}`;
+
+      allBtns.forEach(b => {
+        if (b.textContent.includes(q.correct_answer)) {
+          b.classList.add('correct');
+        }
+      });
+    }
+
+    expText.textContent = `${q.explanation} (Timestamp: ${q.timestamp})`;
+    quizExplanationBox.style.display = 'block';
+    nextQuizQuestionBtn.style.display = 'inline-flex';
+  }
+
+  if (nextQuizQuestionBtn) {
+    nextQuizQuestionBtn.addEventListener('click', () => {
+      currentQuizIndex++;
+      renderQuestion(currentQuizIndex);
+    });
+  }
+
+  function showQuizResults() {
+    quizQuestionContainer.style.display = 'none';
+    nextQuizQuestionBtn.style.display = 'none';
+    quizResultContainer.style.display = 'block';
+
+    const total = currentQuizQuestions.length;
+    const pct = Math.round((currentQuizScore / total) * 100);
+
+    resultScoreHeading.textContent = `Quiz Complete!`;
+    resultScoreSub.textContent = `You scored ${currentQuizScore} out of ${total} (${pct}%)`;
+    quizProgressText.textContent = `Completed • Score: ${pct}%`;
   }
 });

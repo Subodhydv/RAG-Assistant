@@ -14,8 +14,15 @@
   <div class="app-background"></div>
 
   <div class="app-container">
+    <!-- Overlay backdrop for mobile drawer navigation -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <!-- Sidebar Navigation -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
+      <button class="mobile-close-btn" id="sidebarCloseBtn" aria-label="Close navigation menu" title="Close Menu">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
       <div class="brand">
         <div class="brand-icon">
           <i class="fa-solid fa-graduation-cap"></i>
@@ -84,16 +91,25 @@
     <main class="main-content">
       <!-- Header Bar -->
       <header class="top-header">
-        <div class="header-title">
-          <h2 id="pageTitle">Lecture Video Q&A Assistant</h2>
-          <p id="pageSubtitle">Ask questions grounded in transcript excerpts with exact video timestamps.</p>
+        <div class="header-left-wrapper">
+          <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation menu" title="Open Menu">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="header-title">
+            <h2 id="pageTitle">Lecture Video Q&A Assistant</h2>
+            <p id="pageSubtitle">Ask questions grounded in transcript excerpts with exact video timestamps.</p>
+          </div>
         </div>
+
         <div class="header-actions">
-          <a href="https://github.com/Subodhydv/RAG-Assistant" target="_blank" class="btn btn-sm btn-outline" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="View Source Code on GitHub">
-            <i class="fa-brands fa-github"></i> GitHub Repo
+          <button class="btn btn-sm btn-outline" id="generateQuizBtn" title="Generate interactive MCQ quiz from lecture transcript">
+            <i class="fa-solid fa-graduation-cap"></i> <span class="btn-text">Practice Quiz</span>
+          </button>
+          <a href="https://github.com/Subodhydv/RAG-Assistant" target="_blank" class="btn btn-sm btn-outline header-github-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="View Source Code on GitHub">
+            <i class="fa-brands fa-github"></i> <span class="btn-text">GitHub</span>
           </a>
           <button class="btn btn-sm btn-primary" id="exportNotesBtn" title="Export Q&A history to Markdown study notes">
-            <i class="fa-solid fa-file-export"></i> Export Notes
+            <i class="fa-solid fa-file-export"></i> <span class="btn-text">Export Notes</span>
           </button>
           <div class="video-filter-select">
             <i class="fa-solid fa-filter"></i>
@@ -286,8 +302,55 @@
             </div>
           </div>
         </section>
+  <!-- Interactive Quiz Modal -->
+  <div class="modal-overlay" id="quizModal" style="display: none;">
+    <div class="modal-card quiz-modal-card">
+      <button class="modal-close" id="closeQuizModalBtn">&times;</button>
+      
+      <div class="quiz-header">
+        <div class="quiz-title-badge">
+          <i class="fa-solid fa-brain"></i> Interactive Comprehension Quiz
+        </div>
+        <h3 id="quizTitle">Lecture Self-Assessment</h3>
+        <div class="quiz-progress-bar">
+          <div class="quiz-progress-fill" id="quizProgressFill" style="width: 0%;"></div>
+        </div>
+        <div class="quiz-status-text" id="quizProgressText">Preparing Quiz...</div>
       </div>
-    </main>
+
+      <div class="quiz-body" id="quizBody">
+        <div class="quiz-loading" id="quizLoading">
+          <i class="fa-solid fa-circle-notch fa-spin"></i>
+          <p>Generating interactive quiz questions from lecture transcript...</p>
+        </div>
+
+        <div class="quiz-question-container" id="quizQuestionContainer" style="display: none;">
+          <div class="question-text" id="quizQuestionText">Loading question...</div>
+          <div class="options-grid" id="quizOptionsGrid">
+            <!-- Option buttons injected dynamically -->
+          </div>
+          <div class="explanation-box" id="quizExplanationBox" style="display: none;">
+            <div class="exp-status" id="expStatus"></div>
+            <div class="exp-text" id="expText"></div>
+          </div>
+        </div>
+
+        <div class="quiz-result-container" id="quizResultContainer" style="display: none;">
+          <div class="result-icon-badge" id="resultIconBadge"><i class="fa-solid fa-trophy"></i></div>
+          <h3 id="resultScoreHeading">Quiz Complete!</h3>
+          <p id="resultScoreSub">You scored 4 out of 5 (80%)</p>
+          <button class="btn btn-primary btn-block" id="retryQuizBtn">
+            <i class="fa-solid fa-rotate-right"></i> Try Another Quiz
+          </button>
+        </div>
+      </div>
+
+      <div class="quiz-footer" id="quizFooter">
+        <button class="btn btn-primary" id="nextQuizQuestionBtn" style="display: none;">
+          Next Question <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

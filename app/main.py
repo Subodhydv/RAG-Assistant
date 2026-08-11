@@ -25,9 +25,10 @@ from pydantic import BaseModel
 
 from app.config import settings, BASE_DIR, get_session_paths
 from app.generation.answer import generate_answer
+from app.generation.quiz import generate_quiz_questions
 from app.ingestion.chunking import chunk_transcript
 from app.ingestion.transcribe import ingest_video, load_transcript
-from app.models import AskRequest, AskResponse, Citation, IngestResponse
+from app.models import AskRequest, AskResponse, Citation, IngestResponse, QuizRequest, QuizResponse
 from app.retrieval.vector_store import get_store
 
 
@@ -202,6 +203,37 @@ def export_notes(req: ExportNotesRequest):
         media_type="text/markdown",
         headers={"Content-Disposition": 'attachment; filename="lecture_study_notes.md"'},
     )
+
+
+@app.post("/quiz", response_model=QuizResponse)
+def generate_quiz(req: QuizRequest, session_id: str = Depends(get_session_id)):
+    paths = get_session_paths(session_id)
+    transcripts_dir = paths.transcripts_dir
+
+    selected_transcript = None
+
+    if req.video_id:
+        selected_transcript = load_transcript(req.video_id, transcripts_dir=transcripts_dir)
+        if not selected_transcript:
+            selected_transcript = load_transcript(req.video_id, transcripts_dir=settings.transcripts_dir)
+    else:
+        # Pick the first transcript in session transcripts dir, or default
+        files = list(transcripts_dir.glob("*.json"))
+        if files:
+            video_id = files[0].stem
+            selected_transcript = load_transcript(video_id, transcripts_dir=transcripts_dir)
+        else:
+            global_files = list(settings.transcripts_dir.glob("*.json"))
+            if global_files:
+                video_id = global_files[0].stem
+                selected_transcript = load_transcript(video_id, transcripts_dir=settings.transcripts_dir)
+
+    if not selected_transcript:
+        raise HTTPException(status_code=404, detail="No ingested lecture video transcripts found to generate quiz. Please upload a video first!")
+
+    num_q = req.num_questions or 5
+    return generate_quiz_questions(selected_transcript, num_questions=num_q)
+
 
 
 # Mount media files for video playback

@@ -64,3 +64,24 @@ class IngestResponse(BaseModel):
     video_id: str
     num_segments: int
     num_chunks: int
+
+
+class QuizQuestion(BaseModel):
+    id: int
+    question: str
+    options: List[str]
+    correct_answer: str
+    explanation: str
+    timestamp: str
+
+
+class QuizRequest(BaseModel):
+    video_id: Optional[str] = Field(default=None, description="Generate quiz for a specific video, or all videos if None.")
+    num_questions: Optional[int] = Field(default=5, ge=1, le=10)
+
+
+class QuizResponse(BaseModel):
+    video_id: Optional[str]
+    title: str
+    questions: List[QuizQuestion]
+
