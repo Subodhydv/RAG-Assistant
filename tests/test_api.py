@@ -85,7 +85,7 @@ def test_export_notes(client):
 
 
 def test_quiz_endpoint(client, monkeypatch):
-    from app.models import VideoTranscript, TranscriptSegment
+    from app.models import VideoTranscript, TranscriptSegment, QuizResponse, QuizQuestion
     import app.main as main_module
 
     fake_transcript = VideoTranscript(
@@ -98,7 +98,31 @@ def test_quiz_endpoint(client, monkeypatch):
         ]
     )
 
+    fake_quiz_response = QuizResponse(
+        video_id="vid_test",
+        title="Quiz: test_lecture.mp4",
+        questions=[
+            QuizQuestion(
+                id=1,
+                question="What maintains sorted keys?",
+                options=["BST", "Hash table", "Queue", "Stack"],
+                correct_answer="BST",
+                explanation="At 10:00 BSTs maintain sorted keys.",
+                timestamp="10:00"
+            ),
+            QuizQuestion(
+                id=2,
+                question="What provides constant time access?",
+                options=["Hash table", "Array", "Linked List", "Tree"],
+                correct_answer="Hash table",
+                explanation="At 25:00 Hash tables provide O(1) access.",
+                timestamp="25:00"
+            )
+        ]
+    )
+
     monkeypatch.setattr(main_module, "load_transcript", lambda video_id=None, session_id=None: fake_transcript)
+    monkeypatch.setattr(main_module, "generate_quiz_questions", lambda transcript, num_questions=5: fake_quiz_response)
 
     headers = {"X-Session-ID": sign_session_id("sess_test123")}
     resp = client.post("/quiz", json={"num_questions": 2}, headers=headers)
