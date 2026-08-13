@@ -171,14 +171,26 @@ def _generate_fallback_quiz(transcript: VideoTranscript, num_questions: int) -> 
 
 
 def _call_gemini(prompt: str) -> str:
-    import google.generativeai as genai
-    genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel(
-        model_name=settings.gemini_model,
-        system_instruction=QUIZ_SYSTEM_PROMPT
-    )
-    res = model.generate_content(prompt)
-    return res.text
+    if not settings.gemini_api_key:
+        raise ValueError("GEMINI_API_KEY is not configured")
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=settings.gemini_api_key)
+        response = client.models.generate_content(
+            model=settings.gemini_model,
+            contents=f"{QUIZ_SYSTEM_PROMPT}\n\n{prompt}",
+        )
+        return response.text or ""
+    except Exception:
+        import google.generativeai as genai
+        genai.configure(api_key=settings.gemini_api_key)
+        model = genai.GenerativeModel(
+            model_name=settings.gemini_model,
+            system_instruction=QUIZ_SYSTEM_PROMPT
+        )
+        res = model.generate_content(prompt)
+        return res.text
 
 
 def _call_openai(prompt: str) -> str:

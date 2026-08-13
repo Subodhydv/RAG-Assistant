@@ -15,12 +15,11 @@ from app.config import settings
 from app.models import RetrievedChunk
 
 SYSTEM_PROMPT = (
-    "You are an intelligent teaching assistant. "
-    "Primary Instruction: Answer the student's question using the provided lecture transcript excerpts. "
-    "If the provided lecture excerpts do NOT contain enough information to answer the question, "
-    "provide a short, accurate, and direct answer based on your general AI knowledge. "
-    "When using general knowledge outside the provided lecture excerpts, prefix your answer with "
-    "'[General AI Knowledge]: ' so the student knows it was not found in the current lecture transcripts."
+    "You are an intelligent teaching assistant powered by Google Gemini. "
+    "Instructions for answering student questions:\n"
+    "1. If relevant lecture transcript excerpts are provided in the context, answer the question grounded in those excerpts and reference the video timestamps when appropriate.\n"
+    "2. If no relevant lecture excerpts are provided, OR if the student asks a question outside/beyond the scope of the current lecture context, DO NOT say you cannot answer. Instead, provide a clear, accurate, and direct answer based on your general AI knowledge.\n"
+    "3. When answering from general knowledge outside the provided lecture excerpts, start your answer with '[General AI Knowledge]: ' so the student knows it was not found in the current lecture transcripts."
 )
 
 
@@ -33,16 +32,22 @@ def _format_context(chunks: List[RetrievedChunk]) -> str:
 
 
 def build_prompt(question: str, chunks: List[RetrievedChunk]) -> str:
-    context = _format_context(chunks) if chunks else "(no matching lecture excerpts found in vector store)"
-    return (
-        f"Lecture Excerpts Context:\n{context}\n\n"
-        f"Student Question: {question}\n\n"
-        "Instructions: Answer using the excerpts if relevant. If context is missing/insufficient, give a short, correct answer based on general knowledge starting with '[General AI Knowledge]: '."
-    )
+    if chunks:
+        context = _format_context(chunks)
+        return (
+            f"Lecture Excerpts Context:\n{context}\n\n"
+            f"Student Question: {question}\n\n"
+            "Instructions: Answer using the provided lecture excerpts if relevant. If the question goes beyond or is outside the excerpts context, provide a full, accurate answer using your general AI knowledge starting with '[General AI Knowledge]: '."
+        )
+    else:
+        return (
+            f"Student Question: {question}\n\n"
+            "Instructions: No matching lecture video excerpts were found in the vector store for this question. Provide a complete, accurate, and helpful answer to the student's question using your AI knowledge starting with '[General AI Knowledge]: '."
+        )
 
 
 def generate_answer(question: str, chunks: List[RetrievedChunk]) -> str:
-    # Check if API key is configured for the selected provider
+    # Check configured provider API key
     provider = settings.llm_provider
     if provider == "anthropic":
         api_key = settings.anthropic_api_key
@@ -50,8 +55,14 @@ def generate_answer(question: str, chunks: List[RetrievedChunk]) -> str:
         api_key = settings.gemini_api_key
     else:
         api_key = settings.openai_api_key
-    
-    # If no key or placeholder key is set, use direct transcript excerpt summary fallback
+
+    # Automatic fallback to Gemini if configured provider API key is not present
+    if not api_key or api_key in ("sk-ant-...", "sk-...") or api_key.endswith("..."):
+        if settings.gemini_api_key and not settings.gemini_api_key.startswith("sk-"):
+            provider = "gemini"
+            api_key = settings.gemini_api_key
+
+    # If still no valid key, format fallback excerpt summary
     if not api_key or api_key in ("sk-ant-...", "sk-...") or api_key.endswith("..."):
         if not chunks:
             return (
@@ -63,15 +74,20 @@ def generate_answer(question: str, chunks: List[RetrievedChunk]) -> str:
     prompt = build_prompt(question, chunks)
 
     try:
-        if provider == "anthropic":
-            return _call_anthropic(prompt)
+        if provider == "gemini":
+            return _call_gemini(prompt)
         elif provider == "openai":
             return _call_openai(prompt)
-        elif provider == "gemini":
-            return _call_gemini(prompt)
+        elif provider == "anthropic":
+            return _call_anthropic(prompt)
         else:
-            return _format_fallback_excerpt_answer(chunks)
+            return _call_gemini(prompt)
     except Exception as e:
+        if settings.gemini_api_key and provider != "gemini":
+            try:
+                return _call_gemini(prompt)
+            except Exception:
+                pass
         if not chunks:
             return f"[General AI Knowledge Fallback Error]: {e}"
         return _format_fallback_excerpt_answer(chunks, error_msg=str(e))

@@ -21,9 +21,10 @@ from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, File, HTTPException, UploadFile, Depends, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.config import settings, BASE_DIR, get_session_paths
+from app.config import settings, BASE_DIR, DATA_DIR, get_session_paths
 from app.generation.answer import generate_answer
 from app.generation.quiz import generate_quiz_questions
 from app.ingestion.chunking import chunk_transcript
@@ -82,11 +83,10 @@ def list_videos(session_id: str = Depends(get_session_id)) -> List[Dict[str, Any
     for t_file in sorted(sp.transcripts_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
             transcript = load_transcript(t_file.stem, session_id=session_id)
+            if not transcript:
+                continue
             chunks_count = sum(1 for c in store._meta if c.video_id == transcript.video_id)
-            
-            # Find matching raw video file if it exists
-            video_files = list(sp.raw_videos_dir.glob(f"{transcript.video_id}.*"))
-            media_url = f"/media/{video_files[0].name}" if video_files else None
+            media_url = f"/videos/{transcript.video_id}/stream"
 
             videos.append({
                 "video_id": transcript.video_id,
@@ -101,18 +101,35 @@ def list_videos(session_id: str = Depends(get_session_id)) -> List[Dict[str, Any
     return videos
 
 
+@app.get("/videos/{video_id}/stream")
+def stream_video(video_id: str, session_id: str = Depends(get_session_id)):
+    """Stream media file for video playback."""
+    sp = get_session_paths(session_id)
+    files = list(sp.raw_videos_dir.glob(f"{video_id}.*"))
+    if not files:
+        files = list(settings.raw_videos_dir.glob(f"{video_id}.*"))
+    if not files:
+        for sess in (DATA_DIR / "sessions").glob("*"):
+            match = list((sess / "raw_videos").glob(f"{video_id}.*"))
+            if match:
+                files = match
+                break
+    if not files or not files[0].exists():
+        raise HTTPException(404, f"Video stream for ID '{video_id}' not found")
+    return FileResponse(files[0])
+
+
 @app.get("/videos/{video_id}/transcript")
 def get_video_transcript(video_id: str, session_id: str = Depends(get_session_id)):
     """Retrieve full transcript segments for a video in the current private session."""
-    try:
-        transcript = load_transcript(video_id, session_id=session_id)
-        return transcript
-    except FileNotFoundError:
+    transcript = load_transcript(video_id, session_id=session_id)
+    if not transcript:
         raise HTTPException(404, f"Transcript for video '{video_id}' not found")
+    return transcript
 
 
 @app.post("/ingest", response_model=IngestResponse)
-async def ingest(file: UploadFile = File(...), session_id: str = Depends(get_session_id)):
+def ingest(file: UploadFile = File(...), session_id: str = Depends(get_session_id)):
     if not file.filename:
         raise HTTPException(400, "No file provided")
 
@@ -121,22 +138,22 @@ async def ingest(file: UploadFile = File(...), session_id: str = Depends(get_ses
     suffix = Path(file.filename).suffix or ".mp4"
     dest = sp.raw_videos_dir / f"{video_id}{suffix}"
 
-    with dest.open("wb") as f:
-        shutil.copyfileobj(file.file, f)
-
     try:
+        file.file.seek(0)
+        with dest.open("wb") as f:
+            shutil.copyfileobj(file.file, f)
+
         transcript = ingest_video(dest, video_id=video_id, session_id=session_id)
-    except RuntimeError as e:
-        raise HTTPException(500, f"Transcription failed: {e}") from e
+        chunks = chunk_transcript(transcript)
+        get_store(session_id).add_chunks(chunks)
 
-    chunks = chunk_transcript(transcript)
-    get_store(session_id).add_chunks(chunks)
-
-    return IngestResponse(
-        video_id=transcript.video_id,
-        num_segments=len(transcript.segments),
-        num_chunks=len(chunks),
-    )
+        return IngestResponse(
+            video_id=transcript.video_id,
+            num_segments=len(transcript.segments),
+            num_chunks=len(chunks),
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Ingestion failed: {e}") from e
 
 
 from datetime import datetime

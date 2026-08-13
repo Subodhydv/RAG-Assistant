@@ -36,22 +36,25 @@ def _get_model():
 def video_to_audio(video_path: Path, out_dir: Path | None = None) -> Path:
     """Extract mono 16kHz mp3 audio from a video file using ffmpeg.
 
-    16kHz mono is what Whisper expects internally anyway, so resampling
-    here avoids redundant work at inference time.
+    If ffmpeg is unavailable or fails, returns original file path for Whisper.
     """
     out_dir = out_dir or settings.audio_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     audio_path = out_dir / f"{video_path.stem}.mp3"
 
-    cmd = [
-        "ffmpeg", "-y", "-i", str(video_path),
-        "-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k",
-        str(audio_path),
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg failed for {video_path}: {result.stderr[-2000:]}")
-    return audio_path
+    try:
+        cmd = [
+            "ffmpeg", "-y", "-i", str(video_path),
+            "-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k",
+            str(audio_path),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0 and audio_path.exists() and audio_path.stat().st_size > 0:
+            return audio_path
+    except Exception:
+        pass
+
+    return video_path
 
 
 def transcribe_audio(audio_path: Path, video_id: str | None = None) -> VideoTranscript:
