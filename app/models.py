@@ -22,6 +22,7 @@ class VideoTranscript(BaseModel):
     source_filename: str
     language: str
     segments: List[TranscriptSegment]
+    content_hash: Optional[str] = None
 
 
 class Chunk(BaseModel):
@@ -44,6 +45,9 @@ class AskRequest(BaseModel):
     top_k: Optional[int] = None
     video_id: Optional[str] = Field(
         default=None, description="Restrict retrieval to a single video, if set."
+    )
+    conversation_history: Optional[List[dict]] = Field(
+        default=None, description="Optional previous Q&A turns for multi-turn conversational context."
     )
 
 

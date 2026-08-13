@@ -31,22 +31,36 @@ def _format_context(chunks: List[RetrievedChunk]) -> str:
     return "\n\n".join(blocks)
 
 
-def build_prompt(question: str, chunks: List[RetrievedChunk]) -> str:
+def build_prompt(question: str, chunks: List[RetrievedChunk], history: List[dict] | None = None) -> str:
+    parts = []
+    if history:
+        history_lines = ["Previous Conversation History:"]
+        for turn in history[-4:]:  # Include up to 4 recent turns
+            q = turn.get("question", "")
+            a = turn.get("answer", "")
+            if q:
+                history_lines.append(f"Student: {q}")
+            if a:
+                history_lines.append(f"Assistant: {a}")
+        parts.append("\n".join(history_lines) + "\n")
+
     if chunks:
         context = _format_context(chunks)
-        return (
+        parts.append(
             f"Lecture Excerpts Context:\n{context}\n\n"
             f"Student Question: {question}\n\n"
             "Instructions: Answer using the provided lecture excerpts if relevant. If the question goes beyond or is outside the excerpts context, provide a full, accurate answer using your general AI knowledge starting with '[General AI Knowledge]: '."
         )
     else:
-        return (
+        parts.append(
             f"Student Question: {question}\n\n"
             "Instructions: No matching lecture video excerpts were found in the vector store for this question. Provide a complete, accurate, and helpful answer to the student's question using your AI knowledge starting with '[General AI Knowledge]: '."
         )
 
+    return "\n\n".join(parts)
 
-def generate_answer(question: str, chunks: List[RetrievedChunk]) -> str:
+
+def generate_answer(question: str, chunks: List[RetrievedChunk], history: List[dict] | None = None) -> str:
     # Check configured provider API key
     provider = settings.llm_provider
     if provider == "anthropic":
@@ -71,7 +85,7 @@ def generate_answer(question: str, chunks: List[RetrievedChunk]) -> str:
             )
         return _format_fallback_excerpt_answer(chunks)
 
-    prompt = build_prompt(question, chunks)
+    prompt = build_prompt(question, chunks, history=history)
 
     try:
         if provider == "gemini":
@@ -91,6 +105,16 @@ def generate_answer(question: str, chunks: List[RetrievedChunk]) -> str:
         if not chunks:
             return f"[General AI Knowledge Fallback Error]: {e}"
         return _format_fallback_excerpt_answer(chunks, error_msg=str(e))
+
+
+def generate_answer_stream(question: str, chunks: List[RetrievedChunk], history: List[dict] | None = None):
+    """Generator yielding text chunks for Server-Sent Events (SSE) streaming."""
+    full_answer = generate_answer(question, chunks, history=history)
+    # Stream in word chunks for smooth SSE rendering
+    words = full_answer.split(" ")
+    for i in range(0, len(words), 3):
+        chunk_text = " ".join(words[i:i+3]) + " "
+        yield chunk_text
 
 
 def _format_fallback_excerpt_answer(chunks: List[RetrievedChunk], error_msg: str | None = None) -> str:

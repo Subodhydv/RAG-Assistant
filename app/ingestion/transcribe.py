@@ -79,6 +79,35 @@ def transcribe_audio(audio_path: Path, video_id: str | None = None) -> VideoTran
     )
 
 
+import hashlib
+
+
+def compute_file_sha256(file_path: Path, chunk_size: int = 65536) -> str:
+    """Compute SHA-256 content hash of a video/audio file for deduplication."""
+    hasher = hashlib.sha256()
+    with file_path.open("rb") as f:
+        while chunk := f.read(chunk_size):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def find_existing_transcript_by_hash(file_hash: str, session_id: str | None = None) -> VideoTranscript | None:
+    """Check if a transcript with the same content SHA-256 hash already exists."""
+    sp = get_session_paths(session_id)
+    search_dirs = [sp.transcripts_dir, settings.transcripts_dir]
+    for d in search_dirs:
+        if not d.exists():
+            continue
+        for json_file in d.glob("*.json"):
+            try:
+                t = VideoTranscript.model_validate_json(json_file.read_text(encoding="utf-8"))
+                if getattr(t, "content_hash", None) == file_hash:
+                    return t
+            except Exception:
+                continue
+    return None
+
+
 def save_transcript(transcript: VideoTranscript, session_id: str | None = None) -> Path:
     sp = get_session_paths(session_id)
     out_path = sp.transcripts_dir / f"{transcript.video_id}.json"
@@ -86,22 +115,32 @@ def save_transcript(transcript: VideoTranscript, session_id: str | None = None) 
     return out_path
 
 
-def load_transcript(video_id: str, session_id: str | None = None) -> VideoTranscript:
+def load_transcript(video_id: str, session_id: str | None = None) -> VideoTranscript | None:
     sp = get_session_paths(session_id)
     path = sp.transcripts_dir / f"{video_id}.json"
     if not path.exists():
         default_path = settings.transcripts_dir / f"{video_id}.json"
         if default_path.exists():
             path = default_path
+    if not path.exists():
+        return None
     return VideoTranscript.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def ingest_video(
     video_path: Path, video_id: str | None = None, session_id: str | None = None
 ) -> VideoTranscript:
-    """End-to-end: video file on disk -> saved transcript JSON."""
+    """End-to-end: video file on disk -> saved transcript JSON with SHA-256 deduplication."""
     sp = get_session_paths(session_id)
+
+    # Compute content hash to prevent redundant Whisper re-transcription
+    file_hash = compute_file_sha256(video_path)
+    existing = find_existing_transcript_by_hash(file_hash, session_id=session_id)
+    if existing:
+        return existing
+
     audio_path = video_to_audio(video_path, out_dir=sp.audio_dir)
     transcript = transcribe_audio(audio_path, video_id=video_id)
+    transcript.content_hash = file_hash
     save_transcript(transcript, session_id=session_id)
     return transcript

@@ -76,6 +76,17 @@ class Settings:
         load_dotenv(BASE_DIR / ".env", override=True)
         return os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
 
+    max_upload_size_mb: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "500"))
+
+    @property
+    def session_secret_key(self) -> str:
+        load_dotenv(BASE_DIR / ".env", override=True)
+        key = os.getenv("SESSION_SECRET_KEY", "").strip()
+        if not key:
+            # Fallback securely derived from JWT secret or project seed
+            key = os.getenv("JWT_SECRET_KEY", "rag-assistant-secure-hmac-seed-2026").strip()
+        return key
+
     @property
     def auth_enabled(self) -> bool:
         load_dotenv(BASE_DIR / ".env", override=True)

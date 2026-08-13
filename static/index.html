@@ -211,10 +211,18 @@
                   </div>
                   <h4>Drag & Drop your lecture video file here</h4>
                   <p>Supports MP4, MOV, MKV, AVI, MP3, WAV</p>
-                  <button type="button" class="btn btn-secondary" onclick="document.getElementById('videoFileInput').click()">
-                    Browse Files
-                  </button>
+              <!-- YouTube URL Ingestion Card -->
+              <div class="youtube-ingest-wrapper" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+                <div class="card-header" style="margin-bottom: 12px;">
+                  <h4 style="display: flex; align-items: center; gap: 8px;"><i class="fa-brands fa-youtube" style="color: #ff0000; font-size: 20px;"></i> Ingest from YouTube URL</h4>
+                  <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Paste any public YouTube lecture URL for instant audio extraction & vector indexing via <code>yt-dlp</code>.</p>
                 </div>
+                <form id="youtubeIngestForm" class="youtube-form" style="display: flex; gap: 10px;">
+                  <input type="url" id="youtubeUrlInput" placeholder="https://www.youtube.com/watch?v=..." required class="input-field" style="flex: 1; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-main);">
+                  <button type="submit" id="youtubeSubmitBtn" class="btn btn-primary">
+                    <i class="fa-brands fa-youtube"></i> Ingest URL
+                  </button>
+                </form>
               </div>
 
               <!-- Uploading Pipeline Progress -->

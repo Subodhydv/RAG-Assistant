@@ -27,24 +27,16 @@ FAISS index (IndexFlatIP, cosine similarity via normalized vectors)
 retrieved chunks --> prompt --> Claude / GPT --> grounded answer + citations
 ```
 
-## Why these choices (useful for interview talkthroughs)
+## Architecture Highlights (Interview Talkthroughs)
 
-- **faster-whisper over openai-whisper**: CTranslate2 backend, meaningfully
-  faster on CPU-only machines — relevant when transcribing many hours of
-  lecture content.
-- **Sentence-aware chunking with overlap**: naive fixed-segment chunking
-  cuts sentences mid-thought and loses context at chunk boundaries. This
-  implementation backs off to the nearest sentence end and overlaps chunks
-  by a configurable character budget.
-- **Local embeddings (sentence-transformers)**: no per-chunk API cost or
-  rate limit when bulk-ingesting lecture hours; only the final
-  generation step calls a paid LLM API.
-- **FAISS flat index**: exact cosine search. At this project's scale
-  (hundreds to low-thousands of chunks) an approximate index (IVF/HNSW)
-  would be premature optimization — worth being able to say *why* you
-  didn't reach for it.
-- **Swappable LLM provider**: `LLM_PROVIDER=anthropic|openai` env var,
-  so generation logic never has to change to switch providers.
+- **Async Background Ingestion Pipeline**: Ingestion (`POST /ingest` & `POST /ingest-youtube`) executes asynchronously via FastAPI `BackgroundTasks`. Clients poll `GET /ingest/{task_id}/status` for real-time progress (`transcribing -> indexing -> completed`), avoiding cloud HTTP request timeouts on long lecture videos.
+- **SHA-256 Content Hash Deduplication**: Files are hashed before processing. Re-uploading an existing lecture instantly reuses indexed vector chunks without running redundant Whisper transcription.
+- **YouTube URL Ingestion**: Built-in `yt-dlp` audio extraction pipeline (`POST /ingest-youtube`) allows instant indexing directly from public YouTube lecture URLs.
+- **HMAC-Signed Session Isolation**: User workspaces are protected with cryptographic HMAC-SHA256 session tokens, preventing cross-session unauthorized data or video stream access.
+- **`faster-whisper` over `openai-whisper`**: CTranslate2 backend achieves 4x faster CPU execution with lower RAM usage.
+- **Sentence-Aware Chunking with Overlap**: Prevents sentence slicing mid-thought and preserves boundary context.
+- **Local Embeddings (`sentence-transformers`)**: Zero per-chunk embedding API costs or rate limits during bulk lecture ingestion.
+- **Single-Worker FAISS Persistence Note**: `VectorStore` persists indices to disk per session. In multi-worker production deployments (e.g. multiple Uvicorn workers), a centralized vector database (e.g. Qdrant / Pinecone / pgvector) or distributed file lock should replace file-backed FAISS to prevent concurrent process write races.
 
 ## Setup
 

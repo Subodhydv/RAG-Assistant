@@ -438,6 +438,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  async function pollIngestTaskStatus(taskId) {
+    return new Promise((resolve, reject) => {
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetchWithSession(`/ingest/${taskId}/status`);
+          if (!res.ok) return;
+          const statusData = await res.json();
+
+          if (statusData.status === 'transcribing') {
+            updateStep('stepUpload', 'completed');
+            updateStep('stepFFmpeg', 'completed');
+            updateStep('stepWhisper', 'active');
+            pipelineProgressFill.style.width = '65%';
+            pipelineStatusText.textContent = statusData.message || 'Transcribing audio with Whisper...';
+            pipelinePercentText.textContent = '65%';
+          } else if (statusData.status === 'indexing') {
+            updateStep('stepWhisper', 'completed');
+            updateStep('stepFAISS', 'active');
+            pipelineProgressFill.style.width = '85%';
+            pipelineStatusText.textContent = statusData.message || 'Indexing vector embeddings into FAISS...';
+            pipelinePercentText.textContent = '85%';
+          } else if (statusData.status === 'completed') {
+            clearInterval(interval);
+            updateStep('stepFAISS', 'completed');
+            pipelineProgressFill.style.width = '100%';
+            pipelineStatusText.textContent = 'Ingestion complete!';
+            pipelinePercentText.textContent = '100%';
+            resolve(statusData.result || {});
+          } else if (statusData.status === 'failed') {
+            clearInterval(interval);
+            reject(new Error(statusData.message || 'Async ingestion failed'));
+          }
+        } catch (e) {
+          // Retry polling on transient network hiccup
+        }
+      }, 1500);
+    });
+  }
+
   async function handleVideoIngest(file) {
     dropzone.style.display = 'none';
     pipelineProgress.style.display = 'block';
@@ -452,22 +491,6 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('file', file);
 
     try {
-      setTimeout(() => {
-        updateStep('stepUpload', 'completed');
-        updateStep('stepFFmpeg', 'active');
-        pipelineProgressFill.style.width = '45%';
-        pipelineStatusText.textContent = 'FFmpeg extracting mono 16kHz audio...';
-        pipelinePercentText.textContent = '45%';
-      }, 1500);
-
-      setTimeout(() => {
-        updateStep('stepFFmpeg', 'completed');
-        updateStep('stepWhisper', 'active');
-        pipelineProgressFill.style.width = '70%';
-        pipelineStatusText.textContent = 'Faster-Whisper running AI transcription...';
-        pipelinePercentText.textContent = '70%';
-      }, 3500);
-
       const res = await fetchWithSession('/ingest', {
         method: 'POST',
         body: formData
@@ -479,18 +502,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const data = await res.json();
-
-      updateStep('stepWhisper', 'completed');
-      updateStep('stepFAISS', 'completed');
-      pipelineProgressFill.style.width = '100%';
-      pipelineStatusText.textContent = 'Ingestion complete!';
-      pipelinePercentText.textContent = '100%';
+      const result = await pollIngestTaskStatus(data.task_id);
 
       setTimeout(() => {
         pipelineProgress.style.display = 'none';
         ingestResultCard.style.display = 'flex';
         resultTitle.textContent = 'Lecture Video Successfully Ingested!';
-        resultDetails.textContent = `Extracted ${data.num_segments} transcript segments and created ${data.num_chunks} FAISS embeddings for video ID ${data.video_id}.`;
+        resultDetails.textContent = `Extracted ${result.num_segments || 0} transcript segments and created ${result.num_chunks || 0} FAISS embeddings for video ID ${result.video_id || data.video_id}.`;
         dropzone.style.display = 'block';
         loadVideoOptions();
       }, 1000);
@@ -500,6 +518,56 @@ document.addEventListener('DOMContentLoaded', () => {
       pipelineProgress.style.display = 'none';
       dropzone.style.display = 'block';
     }
+  }
+
+  // YouTube Ingestion Form Handler
+  const youtubeIngestForm = document.getElementById('youtubeIngestForm');
+  const youtubeUrlInput = document.getElementById('youtubeUrlInput');
+
+  if (youtubeIngestForm) {
+    youtubeIngestForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = youtubeUrlInput.value.trim();
+      if (!url) return;
+
+      dropzone.style.display = 'none';
+      pipelineProgress.style.display = 'block';
+      ingestResultCard.style.display = 'none';
+      updateStep('stepUpload', 'active');
+      pipelineProgressFill.style.width = '15%';
+      pipelineStatusText.textContent = 'Connecting to YouTube via yt-dlp...';
+      pipelinePercentText.textContent = '15%';
+
+      try {
+        const res = await fetchWithSession('/ingest-youtube', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'YouTube ingestion failed');
+        }
+
+        const data = await res.json();
+        const result = await pollIngestTaskStatus(data.task_id);
+
+        setTimeout(() => {
+          pipelineProgress.style.display = 'none';
+          ingestResultCard.style.display = 'flex';
+          resultTitle.textContent = 'YouTube Lecture Video Ingested!';
+          resultDetails.textContent = `Extracted ${result.num_segments || 0} transcript segments and created ${result.num_chunks || 0} FAISS embeddings.`;
+          dropzone.style.display = 'block';
+          youtubeUrlInput.value = '';
+          loadVideoOptions();
+        }, 1000);
+      } catch (err) {
+        alert(`YouTube Ingestion Error: ${err.message}`);
+        pipelineProgress.style.display = 'none';
+        dropzone.style.display = 'block';
+      }
+    });
   }
 
   function updateStep(stepId, state) {

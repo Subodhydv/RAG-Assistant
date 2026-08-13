@@ -1,12 +1,11 @@
 """
-Exercises the /ask endpoint end-to-end without touching FAISS,
-sentence-transformers, or any LLM API — those are monkeypatched with
-lightweight stubs so this test runs in milliseconds and needs no
-network access or API keys. Run with: pytest tests/test_api.py -v
+Exercises API endpoints end-to-end with signed headers and mocked dependencies.
+Run with: pytest tests/test_api.py -v
 """
 import pytest
 from fastapi.testclient import TestClient
 
+from app.auth import sign_session_id
 from app.models import RetrievedChunk
 
 
@@ -32,7 +31,7 @@ def client(monkeypatch):
     monkeypatch.setattr(
         main_module,
         "generate_answer",
-        lambda question, chunks: f"Stubbed answer using {len(chunks)} excerpt(s).",
+        lambda question, chunks, history=None: f"Stubbed answer using {len(chunks)} excerpt(s).",
     )
 
     return TestClient(main_module.app)
@@ -43,10 +42,11 @@ def test_health(client):
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
     assert resp.json()["session_isolated"] is True
+    assert resp.json()["async_ingest_supported"] is True
 
 
 def test_ask_returns_answer_and_citations(client):
-    headers = {"X-Session-ID": "sess_test123"}
+    headers = {"X-Session-ID": sign_session_id("sess_test123")}
     resp = client.post("/ask", json={"question": "How does a hash map work?"}, headers=headers)
     assert resp.status_code == 200
 
@@ -61,7 +61,7 @@ def test_ask_returns_answer_and_citations(client):
 
 
 def test_ask_rejects_too_short_question(client):
-    headers = {"X-Session-ID": "sess_test123"}
+    headers = {"X-Session-ID": sign_session_id("sess_test123")}
     resp = client.post("/ask", json={"question": "hi"}, headers=headers)
     assert resp.status_code == 422  # pydantic min_length=3 validation
 
@@ -100,11 +100,11 @@ def test_quiz_endpoint(client, monkeypatch):
 
     monkeypatch.setattr(main_module, "load_transcript", lambda video_id=None, session_id=None: fake_transcript)
 
-    resp = client.post("/quiz", json={"num_questions": 2})
+    headers = {"X-Session-ID": sign_session_id("sess_test123")}
+    resp = client.post("/quiz", json={"num_questions": 2}, headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert "questions" in data
     assert len(data["questions"]) == 2
     assert "options" in data["questions"][0]
     assert "correct_answer" in data["questions"][0]
-
