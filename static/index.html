@@ -203,7 +203,7 @@
                 <p>FastAPI uses <code>ffmpeg</code> + <code>faster-whisper</code> to extract mono audio, transcribe timestamps, chunk, and index into FAISS.</p>
               </div>
 
-              <div class="dropzone" id="dropzone">
+              <div class="dropzone" id="dropzone" onclick="document.getElementById('videoFileInput').click()" style="cursor: pointer;">
                 <input type="file" id="videoFileInput" accept="video/*,audio/*" style="display: none;">
                 <div class="dropzone-content">
                   <div class="upload-icon">
@@ -211,6 +211,12 @@
                   </div>
                   <h4>Drag & Drop your lecture video file here</h4>
                   <p>Supports MP4, MOV, MKV, AVI, MP3, WAV</p>
+                  <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); document.getElementById('videoFileInput').click()">
+                    Browse Files
+                  </button>
+                </div>
+              </div>
+
               <!-- YouTube URL Ingestion Card -->
               <div class="youtube-ingest-wrapper" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color);">
                 <div class="card-header" style="margin-bottom: 12px;">
