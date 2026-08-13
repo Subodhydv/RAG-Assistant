@@ -293,15 +293,19 @@ def ingest_youtube(
             ingest_tasks[task_id]["status"] = "downloading"
             ingest_tasks[task_id]["message"] = "Downloading audio from YouTube using yt-dlp..."
 
+            out_template = sp.audio_dir / f"{video_id}.%(ext)s"
             cmd = [
                 "yt-dlp", "--extract-audio", "--audio-format", "mp3",
-                "-o", str(audio_dest), url
+                "--no-playlist", "-o", str(out_template), url
             ]
             res = subprocess.run(cmd, capture_output=True, text=True)
-            if res.returncode != 0 or not audio_dest.exists():
+
+            generated_files = list(sp.audio_dir.glob(f"{video_id}.*"))
+            if res.returncode != 0 or not generated_files:
                 raise RuntimeError(f"yt-dlp failed: {res.stderr[-500:]}")
 
-            _run_background_ingest(task_id, audio_dest, video_id, session_id)
+            audio_file = generated_files[0]
+            _run_background_ingest(task_id, audio_file, video_id, session_id)
         except Exception as e:
             ingest_tasks[task_id]["status"] = "failed"
             ingest_tasks[task_id]["message"] = f"YouTube ingestion failed: {e}"

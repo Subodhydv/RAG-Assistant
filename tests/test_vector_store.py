@@ -25,6 +25,7 @@ def test_vector_store_add_and_search(monkeypatch):
 
         import app.retrieval.vector_store as store_module
         monkeypatch.setattr(store_module, "embed_texts", fake_embed)
+        monkeypatch.setattr(store_module, "_get_embedder", lambda: None)
 
         store = VectorStore(index_dir=tmp_path)
         assert store._index.ntotal == 0
