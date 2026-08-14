@@ -9,5 +9,5 @@ services:
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: WHISPER_MODEL_SIZE
-        value: base
+        value: tiny
 

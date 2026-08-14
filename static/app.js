@@ -439,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function pollIngestTaskStatus(taskId) {
+    let currentPct = 40;
     return new Promise((resolve, reject) => {
       const interval = setInterval(async () => {
         try {
@@ -446,19 +447,26 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!res.ok) return;
           const statusData = await res.json();
 
-          if (statusData.status === 'transcribing') {
+          if (statusData.status === 'downloading') {
+            updateStep('stepUpload', 'completed');
+            updateStep('stepFFmpeg', 'active');
+            pipelineProgressFill.style.width = '35%';
+            pipelineStatusText.textContent = statusData.message || 'Downloading audio with yt-dlp...';
+            pipelinePercentText.textContent = '35%';
+          } else if (statusData.status === 'transcribing') {
             updateStep('stepUpload', 'completed');
             updateStep('stepFFmpeg', 'completed');
             updateStep('stepWhisper', 'active');
-            pipelineProgressFill.style.width = '65%';
-            pipelineStatusText.textContent = statusData.message || 'Transcribing audio with Whisper...';
-            pipelinePercentText.textContent = '65%';
+            if (currentPct < 82) currentPct += 4;
+            pipelineProgressFill.style.width = `${currentPct}%`;
+            pipelineStatusText.textContent = statusData.message || 'Transcribing speech with Whisper...';
+            pipelinePercentText.textContent = `${currentPct}%`;
           } else if (statusData.status === 'indexing') {
             updateStep('stepWhisper', 'completed');
             updateStep('stepFAISS', 'active');
-            pipelineProgressFill.style.width = '85%';
+            pipelineProgressFill.style.width = '92%';
             pipelineStatusText.textContent = statusData.message || 'Indexing vector embeddings into FAISS...';
-            pipelinePercentText.textContent = '85%';
+            pipelinePercentText.textContent = '92%';
           } else if (statusData.status === 'completed') {
             clearInterval(interval);
             updateStep('stepFAISS', 'completed');

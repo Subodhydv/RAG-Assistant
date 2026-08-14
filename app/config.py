@@ -28,7 +28,7 @@ class Settings:
 
     # --- transcription (Whisper) --------------------------------------
     # "tiny" / "base" / "small" / "medium" / "large-v3"
-    whisper_model_size: str = os.getenv("WHISPER_MODEL_SIZE", "base")
+    whisper_model_size: str = os.getenv("WHISPER_MODEL_SIZE", "tiny")
     whisper_device: str = os.getenv("WHISPER_DEVICE", "cpu")
     whisper_compute_type: str = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
