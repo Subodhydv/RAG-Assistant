@@ -57,7 +57,11 @@ def video_to_audio(video_path: Path, out_dir: Path | None = None) -> Path:
     return video_path
 
 
-def transcribe_audio(audio_path: Path, video_id: str | None = None) -> VideoTranscript:
+def transcribe_audio(
+    audio_path: Path,
+    video_id: str | None = None,
+    progress_callback: Optional[Any] = None
+) -> VideoTranscript:
     """Run Whisper on an audio file and return a structured transcript
     with per-segment timestamps preserved (needed later so citations
     can point a learner back to the exact moment in the video)."""
@@ -65,16 +69,20 @@ def transcribe_audio(audio_path: Path, video_id: str | None = None) -> VideoTran
     model = _get_model()
 
     segments_iter, info = model.transcribe(str(audio_path), vad_filter=True)
-    segments = [
-        TranscriptSegment(start=s.start, end=s.end, text=s.text.strip())
-        for s in segments_iter
-        if s.text.strip()
-    ]
+    total_duration = getattr(info, "duration", 0.0) or 1.0
+
+    segments = []
+    for s in segments_iter:
+        if s.text.strip():
+            segments.append(TranscriptSegment(start=s.start, end=s.end, text=s.text.strip()))
+        if progress_callback and total_duration > 0:
+            pct = int(40 + (s.end / total_duration) * 45)
+            progress_callback(min(88, max(40, pct)))
 
     return VideoTranscript(
         video_id=video_id,
         source_filename=audio_path.name,
-        language=info.language,
+        language=getattr(info, "language", "en") or "en",
         segments=segments,
     )
 
@@ -128,7 +136,10 @@ def load_transcript(video_id: str, session_id: str | None = None) -> VideoTransc
 
 
 def ingest_video(
-    video_path: Path, video_id: str | None = None, session_id: str | None = None
+    video_path: Path,
+    video_id: str | None = None,
+    session_id: str | None = None,
+    progress_callback: Optional[Any] = None
 ) -> VideoTranscript:
     """End-to-end: video file on disk -> saved transcript JSON with SHA-256 deduplication."""
     sp = get_session_paths(session_id)
@@ -137,10 +148,12 @@ def ingest_video(
     file_hash = compute_file_sha256(video_path)
     existing = find_existing_transcript_by_hash(file_hash, session_id=session_id)
     if existing:
+        if progress_callback:
+            progress_callback(88)
         return existing
 
     audio_path = video_to_audio(video_path, out_dir=sp.audio_dir)
-    transcript = transcribe_audio(audio_path, video_id=video_id)
+    transcript = transcribe_audio(audio_path, video_id=video_id, progress_callback=progress_callback)
     transcript.content_hash = file_hash
     save_transcript(transcript, session_id=session_id)
     return transcript

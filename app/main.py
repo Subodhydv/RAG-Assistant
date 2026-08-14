@@ -187,16 +187,25 @@ def delete_video(video_id: str, session_id: str = Depends(get_current_session)):
 def _run_background_ingest(task_id: str, dest_path: Path, video_id: str, session_id: str):
     """Background task worker for video transcription, chunking, and FAISS indexing."""
     try:
+        def on_progress(pct: int):
+            if task_id in ingest_tasks:
+                ingest_tasks[task_id]["status"] = "transcribing"
+                ingest_tasks[task_id]["percent"] = pct
+                ingest_tasks[task_id]["message"] = f"Transcribing speech with Whisper ({pct}%)..."
+
         ingest_tasks[task_id]["status"] = "transcribing"
+        ingest_tasks[task_id]["percent"] = 40
         ingest_tasks[task_id]["message"] = "Extracting audio & transcribing speech with Whisper..."
-        transcript = ingest_video(dest_path, video_id=video_id, session_id=session_id)
+        transcript = ingest_video(dest_path, video_id=video_id, session_id=session_id, progress_callback=on_progress)
 
         ingest_tasks[task_id]["status"] = "indexing"
+        ingest_tasks[task_id]["percent"] = 92
         ingest_tasks[task_id]["message"] = "Generating embeddings & indexing into FAISS vector store..."
         chunks = chunk_transcript(transcript)
         get_store(session_id).add_chunks(chunks)
 
         ingest_tasks[task_id]["status"] = "completed"
+        ingest_tasks[task_id]["percent"] = 100
         ingest_tasks[task_id]["message"] = "Ingestion complete!"
         ingest_tasks[task_id]["result"] = {
             "video_id": transcript.video_id,
